@@ -1,6 +1,6 @@
 {
   "pipeline_version": "3.0.0",
-  "compiled_at": "2026-05-07T16:14:10.078399+00:00",
+  "compiled_at": "2026-05-07T16:42:23.456533+00:00",
   "preprocessing_steps": [
     "load raw lexical packs from preprocessing/raw",
     "normalize rule specs and deduplicate tokens",

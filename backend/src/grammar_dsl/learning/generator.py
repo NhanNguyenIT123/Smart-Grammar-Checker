@@ -153,10 +153,10 @@ class ExerciseGenerator:
         return payload
 
     def _build_tense_fill(self, blueprint: dict[str, Any], seed_val: int) -> dict[str, Any]:
+        features = set(blueprint.get("required_features", []))
         tense = self._pick_feature(blueprint, self.TENSE_FEATURES)
         subject = self._pick_subject(tense, blueprint, seed_val)
         
-        # Use collocations if available for more sensible sentences
         collocation = self._pick_collocation(seed_val)
         if collocation:
             verb_base, obj = collocation["verb"], collocation["object"]
@@ -165,15 +165,38 @@ class ExerciseGenerator:
             obj = self._pick_from_pool("objects", blueprint, seed_val)
             
         time_marker = self._pick_time_marker(tense, blueprint, seed_val)
-        answer = self._affirmative_sentence(tense, subject, verb_base, obj, time_marker)
-        expected = self._affirmative_verb_phrase(tense, subject, verb_base)
-        prompt = self._fill_sentence_template(subject["surface"], f"({verb_base}) ____", obj, time_marker)
+
+        if "negative" in features:
+            expected_list = self._negative_variants(tense, subject, verb_base, obj, time_marker)
+            # Extract just the verb phrase from the full sentence (this is a simplified heuristic)
+            expected = self._extract_verb_phrase(expected_list[0], subject["surface"], obj, time_marker)
+            prompt = self._fill_sentence_template(subject["surface"], f"(not {verb_base}) ____", obj, time_marker)
+            answer = expected_list[0]
+        elif "interrogative" in features:
+            expected_list = self._question_variants(tense, subject, verb_base, obj, time_marker)
+            expected = self._extract_verb_phrase(expected_list[0], subject["surface"], obj, time_marker)
+            # For questions, the gap might be at the start or middle, so we use a different template
+            prompt = expected_list[0].replace(expected, "____")
+            prompt = f"({subject['surface']} {verb_base}) {prompt}"
+            answer = expected_list[0]
+        else:
+            expected = self._affirmative_verb_phrase(tense, subject, verb_base)
+            prompt = self._fill_sentence_template(subject["surface"], f"({verb_base}) ____", obj, time_marker)
+            answer = self._affirmative_sentence(tense, subject, verb_base, obj, time_marker)
+
         return {
             "prompt": f"Fill in the missing verb form: {prompt}",
             "expected_answer": expected,
             "accepted_variants": [expected],
             "answer_preview": answer,
         }
+
+    def _extract_verb_phrase(self, full_sentence: str, subject: str, obj: str, time_marker: str) -> str:
+        # Simple extraction logic: remove subject and tail from sentence
+        phrase = full_sentence.replace(subject, "", 1).replace(obj, "", 1).strip()
+        if time_marker:
+            phrase = phrase.replace(time_marker, "", 1).strip()
+        return phrase.rstrip(".").strip()
 
     def _build_tense_transform(self, blueprint: dict[str, Any], seed_val: int) -> dict[str, Any]:
         features = set(blueprint.get("required_features", []))

@@ -2,7 +2,7 @@
   "metadata": {
     "name": "GrammarDSL Compiled Knowledge Base",
     "pipeline_version": "3.0.0",
-    "compiled_at": "2026-05-07T16:14:10.078399+00:00"
+    "compiled_at": "2026-05-07T16:42:23.456533+00:00"
   },
   "verbs": {
     "accept": [
@@ -19806,24 +19806,24 @@
       "family": "tense-fill"
     },
     {
-      "id": "present-simple-negative-transform",
-      "item_type": "transform",
+      "id": "present-simple-negative-fill",
+      "item_type": "fill_blank",
       "difficulty": "starter",
       "required_features": [
         "present simple",
         "negative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
-      "id": "present-simple-interrogative-transform",
-      "item_type": "transform",
+      "id": "present-simple-interrogative-fill",
+      "item_type": "fill_blank",
       "difficulty": "starter",
       "required_features": [
         "present simple",
         "interrogative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
       "id": "past-simple-affirmative-fill",
@@ -19836,24 +19836,24 @@
       "family": "tense-fill"
     },
     {
-      "id": "past-simple-negative-transform",
-      "item_type": "transform",
+      "id": "past-simple-negative-fill",
+      "item_type": "fill_blank",
       "difficulty": "starter",
       "required_features": [
         "past simple",
         "negative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
-      "id": "past-simple-interrogative-transform",
-      "item_type": "transform",
+      "id": "past-simple-interrogative-fill",
+      "item_type": "fill_blank",
       "difficulty": "intermediate",
       "required_features": [
         "past simple",
         "interrogative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
       "id": "future-simple-affirmative-fill",
@@ -19866,24 +19866,24 @@
       "family": "tense-fill"
     },
     {
-      "id": "future-simple-negative-transform",
-      "item_type": "transform",
+      "id": "future-simple-negative-fill",
+      "item_type": "fill_blank",
       "difficulty": "starter",
       "required_features": [
         "future simple",
         "negative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
-      "id": "future-simple-interrogative-transform",
-      "item_type": "transform",
+      "id": "future-simple-interrogative-fill",
+      "item_type": "fill_blank",
       "difficulty": "starter",
       "required_features": [
         "future simple",
         "interrogative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
       "id": "present-continuous-affirmative-fill",
@@ -19896,24 +19896,24 @@
       "family": "tense-fill"
     },
     {
-      "id": "present-continuous-negative-transform",
-      "item_type": "transform",
+      "id": "present-continuous-negative-fill",
+      "item_type": "fill_blank",
       "difficulty": "starter",
       "required_features": [
         "present continuous",
         "negative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
-      "id": "present-continuous-interrogative-transform",
-      "item_type": "transform",
+      "id": "present-continuous-interrogative-fill",
+      "item_type": "fill_blank",
       "difficulty": "starter",
       "required_features": [
         "present continuous",
         "interrogative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
       "id": "past-continuous-affirmative-fill",
@@ -19926,24 +19926,24 @@
       "family": "tense-fill"
     },
     {
-      "id": "past-continuous-negative-transform",
-      "item_type": "transform",
+      "id": "past-continuous-negative-fill",
+      "item_type": "fill_blank",
       "difficulty": "intermediate",
       "required_features": [
         "past continuous",
         "negative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
-      "id": "past-continuous-interrogative-transform",
-      "item_type": "transform",
+      "id": "past-continuous-interrogative-fill",
+      "item_type": "fill_blank",
       "difficulty": "intermediate",
       "required_features": [
         "past continuous",
         "interrogative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
       "id": "future-continuous-affirmative-fill",
@@ -19966,24 +19966,24 @@
       "family": "tense-fill"
     },
     {
-      "id": "present-perfect-negative-transform",
-      "item_type": "transform",
+      "id": "present-perfect-negative-fill",
+      "item_type": "fill_blank",
       "difficulty": "intermediate",
       "required_features": [
         "present perfect",
         "negative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
-      "id": "present-perfect-interrogative-transform",
-      "item_type": "transform",
+      "id": "present-perfect-interrogative-fill",
+      "item_type": "fill_blank",
       "difficulty": "intermediate",
       "required_features": [
         "present perfect",
         "interrogative"
       ],
-      "family": "tense-transform"
+      "family": "tense-fill"
     },
     {
       "id": "past-perfect-affirmative-fill",
@@ -21390,7 +21390,7 @@
   },
   "pipeline_summary": {
     "pipeline_version": "3.0.0",
-    "compiled_at": "2026-05-07T16:14:10.078399+00:00",
+    "compiled_at": "2026-05-07T16:42:23.456533+00:00",
     "preprocessing_steps": [
       "load raw lexical packs from preprocessing/raw",
       "normalize rule specs and deduplicate tokens",
