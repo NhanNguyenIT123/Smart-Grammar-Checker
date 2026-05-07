@@ -155,8 +155,15 @@ class ExerciseGenerator:
     def _build_tense_fill(self, blueprint: dict[str, Any], seed_val: int) -> dict[str, Any]:
         tense = self._pick_feature(blueprint, self.TENSE_FEATURES)
         subject = self._pick_subject(tense, blueprint, seed_val)
-        verb_base = self._pick_from_pool("transitive_verbs", blueprint, seed_val)
-        obj = self._pick_from_pool("objects", blueprint, seed_val)
+        
+        # Use collocations if available for more sensible sentences
+        collocation = self._pick_collocation(seed_val)
+        if collocation:
+            verb_base, obj = collocation["verb"], collocation["object"]
+        else:
+            verb_base = self._pick_from_pool("transitive_verbs", blueprint, seed_val)
+            obj = self._pick_from_pool("objects", blueprint, seed_val)
+            
         time_marker = self._pick_time_marker(tense, blueprint, seed_val)
         answer = self._affirmative_sentence(tense, subject, verb_base, obj, time_marker)
         expected = self._affirmative_verb_phrase(tense, subject, verb_base)
@@ -172,8 +179,15 @@ class ExerciseGenerator:
         features = set(blueprint.get("required_features", []))
         tense = self._pick_feature(blueprint, self.TENSE_FEATURES)
         subject = self._pick_subject(tense, blueprint, seed_val)
-        verb_base = self._pick_from_pool("transitive_verbs", blueprint, seed_val)
-        obj = self._pick_from_pool("objects", blueprint, seed_val)
+        
+        # Use collocations if available for more sensible sentences
+        collocation = self._pick_collocation(seed_val)
+        if collocation:
+            verb_base, obj = collocation["verb"], collocation["object"]
+        else:
+            verb_base = self._pick_from_pool("transitive_verbs", blueprint, seed_val)
+            obj = self._pick_from_pool("objects", blueprint, seed_val)
+            
         time_marker = self._pick_time_marker(tense, blueprint, seed_val)
         affirmative = self._affirmative_sentence(tense, subject, verb_base, obj, time_marker)
 
@@ -284,6 +298,12 @@ class ExerciseGenerator:
         if not markers:
             return ""
         return markers[seed_val % len(markers)]
+
+    def _pick_collocation(self, seed_val: int) -> dict[str, str] | None:
+        pool = self.lexical_pools.get("verb_object_collocations", [])
+        if not pool:
+            return None
+        return pool[seed_val % len(pool)]
 
     def _affirmative_sentence(
         self,
