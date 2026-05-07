@@ -22,3 +22,7 @@ def main() -> None:
     print(f' - Synonym entries: {summary["knowledge_stats"]["synonym_entries"]}')
     print(f' - Dictionary entries: {summary["knowledge_stats"]["dictionary_entries"]}')
     print(f' - Phrase index entries: {summary["knowledge_stats"]["phrase_index_entries"]}')
+
+
+if __name__ == "__main__":
+    main()

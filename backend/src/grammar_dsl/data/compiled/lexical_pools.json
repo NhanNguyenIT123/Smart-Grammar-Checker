@@ -1027,44 +1027,127 @@
         "answer": "went"
       },
       {
-        "prompt": "The chef ____ a delicious meal tonight.",
-        "answer": "cooks"
-      },
-      {
         "prompt": "The sun ____ in the east.",
         "answer": "rises"
       }
     ]
   },
   "verb_object_collocations": [
-    {"verb": "play", "object": "the piano"},
-    {"verb": "play", "object": "the guitar"},
-    {"verb": "play", "object": "a song"},
-    {"verb": "write", "object": "the report"},
-    {"verb": "write", "object": "the email"},
-    {"verb": "write", "object": "a letter"},
-    {"verb": "watch", "object": "the movie"},
-    {"verb": "watch", "object": "the game"},
-    {"verb": "cook", "object": "the meal"},
-    {"verb": "cook", "object": "dinner"},
-    {"verb": "read", "object": "the book"},
-    {"verb": "read", "object": "the article"},
-    {"verb": "finish", "object": "the project"},
-    {"verb": "finish", "object": "the homework"},
-    {"verb": "clean", "object": "the room"},
-    {"verb": "clean", "object": "the house"},
-    {"verb": "drive", "object": "the car"},
-    {"verb": "study", "object": "English"},
-    {"verb": "achieve", "object": "the goal"},
-    {"verb": "solve", "object": "the problem"},
-    {"verb": "prepare", "object": "the presentation"},
-    {"verb": "organize", "object": "the meeting"},
-    {"verb": "develop", "object": "the software"},
-    {"verb": "fix", "object": "the computer"},
-    {"verb": "open", "object": "the window"},
-    {"verb": "close", "object": "the door"},
-    {"verb": "call", "object": "my parents"},
-    {"verb": "send", "object": "the message"},
-    {"verb": "celebrate", "object": "the victory"}
+    {
+      "verb": "play",
+      "object": "the piano"
+    },
+    {
+      "verb": "play",
+      "object": "the guitar"
+    },
+    {
+      "verb": "play",
+      "object": "a song"
+    },
+    {
+      "verb": "write",
+      "object": "the report"
+    },
+    {
+      "verb": "write",
+      "object": "the email"
+    },
+    {
+      "verb": "write",
+      "object": "a letter"
+    },
+    {
+      "verb": "watch",
+      "object": "the movie"
+    },
+    {
+      "verb": "watch",
+      "object": "the game"
+    },
+    {
+      "verb": "cook",
+      "object": "the meal"
+    },
+    {
+      "verb": "cook",
+      "object": "dinner"
+    },
+    {
+      "verb": "read",
+      "object": "the book"
+    },
+    {
+      "verb": "read",
+      "object": "the article"
+    },
+    {
+      "verb": "finish",
+      "object": "the project"
+    },
+    {
+      "verb": "finish",
+      "object": "the homework"
+    },
+    {
+      "verb": "clean",
+      "object": "the room"
+    },
+    {
+      "verb": "clean",
+      "object": "the house"
+    },
+    {
+      "verb": "drive",
+      "object": "the car"
+    },
+    {
+      "verb": "study",
+      "object": "English"
+    },
+    {
+      "verb": "achieve",
+      "object": "the goal"
+    },
+    {
+      "verb": "solve",
+      "object": "the problem"
+    },
+    {
+      "verb": "prepare",
+      "object": "the presentation"
+    },
+    {
+      "verb": "organize",
+      "object": "the meeting"
+    },
+    {
+      "verb": "develop",
+      "object": "the software"
+    },
+    {
+      "verb": "fix",
+      "object": "the computer"
+    },
+    {
+      "verb": "open",
+      "object": "the window"
+    },
+    {
+      "verb": "close",
+      "object": "the door"
+    },
+    {
+      "verb": "call",
+      "object": "my parents"
+    },
+    {
+      "verb": "send",
+      "object": "the message"
+    },
+    {
+      "verb": "celebrate",
+      "object": "the victory"
+    }
   ]
 }
