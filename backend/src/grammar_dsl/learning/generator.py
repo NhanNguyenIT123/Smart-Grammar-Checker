@@ -174,7 +174,9 @@ class ExerciseGenerator:
             answer = expected_list[0]
         elif "interrogative" in features:
             expected_list = self._question_variants(tense, subject, verb_base, obj, time_marker)
-            expected = self._extract_verb_phrase(expected_list[0], subject["surface"], obj, time_marker)
+            # For interrogatives, we keep the subject in the 'expected' phrase so that 
+            # the gap replacement works (since the subject is often between auxiliary and verb)
+            expected = self._extract_verb_phrase(expected_list[0], "", obj, time_marker)
             # For questions, the gap might be at the start or middle, so we use a different template
             prompt = expected_list[0].replace(expected, "____")
             prompt = f"({subject['surface']} {verb_base}) {prompt}"
@@ -193,10 +195,23 @@ class ExerciseGenerator:
 
     def _extract_verb_phrase(self, full_sentence: str, subject: str, obj: str, time_marker: str) -> str:
         # Simple extraction logic: remove subject and tail from sentence
-        phrase = full_sentence.replace(subject, "", 1).replace(obj, "", 1).strip()
+        phrase = full_sentence
+        
+        # Handle case-insensitive subject removal (important for {subject_lower} templates)
+        if subject:
+            low_phrase = phrase.lower()
+            low_sub = subject.lower()
+            idx = low_phrase.find(low_sub)
+            if idx != -1:
+                phrase = phrase[:idx] + phrase[idx + len(subject):]
+
+        if obj:
+            phrase = phrase.replace(obj, "", 1)
+        
         if time_marker:
-            phrase = phrase.replace(time_marker, "", 1).strip()
-        return phrase.rstrip(".").strip()
+            phrase = phrase.replace(time_marker, "", 1)
+            
+        return phrase.rstrip(".?").strip()
 
     def _build_tense_transform(self, blueprint: dict[str, Any], seed_val: int) -> dict[str, Any]:
         features = set(blueprint.get("required_features", []))
