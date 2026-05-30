@@ -13,7 +13,8 @@ dependencies = [
     "torch",
     "transformers",
     "accelerate",
-    "spacy"
+    "spacy",
+    "sentencepiece"
 ]
 
 [tool.setuptools]

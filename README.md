@@ -48,7 +48,7 @@ flowchart LR
 | Backend API | Python `BaseHTTPRequestHandler` / `ThreadingHTTPServer` |
 | Parsing | ANTLR 4 |
 | Persistence | SQLite |
-| Grammar analysis | Rule-based heuristics + compiled knowledge packs |
+| Grammar analysis | Rule-based heuristics + compiled knowledge packs, optional spaCy/local ML enrichment |
 | Exercise generation | Local template + lexical-pool + morphology pipeline |
 
 ## Supported DSL commands
@@ -174,3 +174,21 @@ You can also create a new **demo student** from the register page.
 - No external LLM or API is required for exercise generation.
 - The exercise generator uses a **lexical pool of 280+ verbs and 120+ objects** creating millions of unique sentence permutations to prevent repetition.
 - Quiz grading is **answer-key first**; grammar checking is used as feedback support.
+
+## Optional NLP / PyTorch upgrade
+
+The repository includes a lightweight, opt-in grammar error correction pipeline under `backend/ml/`.
+
+- `backend/ml/scripts/prepare_gec_dataset.py` normalizes local `.jsonl`, `.csv`, or `.m2` sentence-pair datasets.
+- `backend/ml/scripts/train_gec_t5.py` fine-tunes a small T5 model with PyTorch/Hugging Face.
+- `backend/ml/scripts/evaluate_gec.py` reports lightweight exact-match and changed-rate metrics.
+- `backend/src/grammar_dsl/services/local_ml.py` connects a trained local model to the existing grammar check flow.
+
+The local ML backend is disabled by default. Enable it only after training or placing a model at `backend/ml/models/gec_t5_small`:
+
+```powershell
+$env:GRAMMAR_CHECK_ENABLE_LOCAL_ML="1"
+python backend/run.py serve --host 127.0.0.1 --port 8000
+```
+
+For RTX 3050 6GB-class machines, start with `t5-small`, `batch-size=1`, `gradient-accumulation-steps=8`, `max_length=128`, and 5k-10k sentence pairs.

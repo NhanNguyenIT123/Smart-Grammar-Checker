@@ -804,6 +804,9 @@ class CommandService:
                 if local_errors:
                     analysis_dict["grammar_errors"] = [*analysis_dict.get("grammar_errors", []), *local_errors]
                     analysis_dict["grammar_issues"] = [*analysis_dict.get("grammar_issues", []), *local_errors]
+                    corrected_text = str(local_ml_result.get("corrected_text", "")).strip()
+                    if corrected_text and corrected_text != paragraph:
+                        analysis_dict["corrected_text"] = corrected_text
                     analysis_dict["analysis_backend"] = "rule-based+local-ml"
             except Exception:
                 # Any local-ML failure should degrade gracefully without breaking the command.
