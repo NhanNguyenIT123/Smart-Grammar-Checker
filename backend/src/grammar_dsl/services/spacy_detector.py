@@ -195,7 +195,7 @@ class SpacyGrammarDetector:
                 continue
 
             if subject in singular:
-                base = verb_engine.to_base(verb_surface) or verb_surface
+                base = verb_engine.to_base(verb_surface) or verb.lemma_.lower()
                 singular_form = verb_engine.third_person_singular(base)
                 if singular_form and singular_form != verb_surface:
                     signals.append(
@@ -210,7 +210,7 @@ class SpacyGrammarDetector:
                     )
             elif subject in plural:
                 if verb_engine.is_third_person_form(verb_surface) and verb_surface not in {"is", "has", "does"}:
-                    base = verb_engine.to_base(verb_surface) or verb_surface.rstrip("s")
+                    base = verb_engine.to_base(verb_surface) or verb.lemma_.lower()
                     if base != verb_surface:
                         signals.append(
                             {

@@ -51,6 +51,12 @@ CLAUSE_CONNECTORS = {
     "or",
     "so",
 }
+COLLOCATION_NOUNS = {
+    "research", "report", "attention", "advice", "feedback", "response",
+    "conversation", "summary", "decision", "mistake", "homework",
+    "explanation", "complaint", "suggestion", "truth", "plan", "traffic",
+    "presentation", "slides", "jacket", "speaker", "workshop", "draft", "evaluation"
+}
 SINGULAR_REFERENCE_WORDS = {"he", "she", "it", "this", "that"}
 PLURAL_REFERENCE_WORDS = {"we", "they", "you", "these", "those"}
 SINGULAR_S_ENDING_NOUNS = {
@@ -146,7 +152,7 @@ class GrammarChecker:
             for item in repository.source_manifest
             if isinstance(item, dict) and item.get("id")
         }
-        self.clause_connectors = CLAUSE_CONNECTORS | set(self.rules.get("linking_words", {}).get("subordinators", []))
+        self.clause_connectors = CLAUSE_CONNECTORS | set(self.rules.get("linking_words", {}).get("subordinators", [])) | {"after", "before"}
         self.collocation_lead_verbs = {
             phrase_tokens[0]
             for rule in self.semantic_patterns.get("unlikely_phrases", [])
@@ -274,7 +280,24 @@ class GrammarChecker:
         spelling_issues = self.spelling_checker.check_words(words)
         grammar_words = self._apply_spelling_to_words(words, spelling_issues)
         time_signals = self._detect_time_expressions(sentence)
-        surface_tense = self._detect_surface_tense(grammar_words)
+        
+        detected_tenses: list[TenseSignal] = []
+        for clause in self._segment_clauses(sentence):
+            clause_words = clause["words"]
+            clause_tense = self._detect_surface_tense(clause_words)
+            if clause_tense and not any(t.name == clause_tense.name for t in detected_tenses):
+                detected_tenses.append(clause_tense)
+
+        if not detected_tenses:
+            whole_tense = self._detect_surface_tense(grammar_words)
+            if whole_tense:
+                detected_tenses.append(whole_tense)
+
+        surface_tense = detected_tenses[0] if detected_tenses else None
+
+        for sig in time_signals:
+            if not any(t.name == sig.name for t in detected_tenses):
+                detected_tenses.append(sig)
         
         grammar_issues = []
         grammar_issues.extend(self._check_sentence_capitalization(sentence, tokens))
@@ -309,7 +332,7 @@ class GrammarChecker:
             "semantic_warnings": semantic_warnings,
             "time_signals": time_signals,
             "surface_tense": surface_tense,
-            "detected_tenses": [surface_tense] if surface_tense else [],
+            "detected_tenses": detected_tenses,
             "corrected_sentence": corrected_sentence,
             "corrections": corrections,
         }
@@ -323,8 +346,32 @@ class GrammarChecker:
         for tense_name, patterns in time_data.items():
             for pattern in patterns:
                 if re.search(r'\b' + re.escape(pattern) + r'\b', text, re.IGNORECASE):
+                    if pattern.lower() == "for":
+                        time_words = {
+                            "hour", "hours", "minute", "minutes", "day", "days",
+                            "week", "weeks", "month", "months", "year", "years",
+                            "decade", "decades", "century", "centuries", "time", "long"
+                        }
+                        lowered_text = text.lower()
+                        for_match = re.search(r'\bfor\b', lowered_text)
+                        if for_match:
+                            after_for = lowered_text[for_match.end():]
+                            words_after = set(re.findall(r'\b[a-z]+\b', after_for))
+                            if not (words_after & time_words):
+                                continue
                     signals.append(TenseSignal(name=tense_name, source="time-expressions", evidence=pattern))
-        return signals
+        
+        # Remove sub-phrase duplicates
+        filtered_signals = []
+        for s1 in signals:
+            is_sub = False
+            for s2 in signals:
+                if s1 is not s2 and s1.evidence.lower() in s2.evidence.lower():
+                    is_sub = True
+                    break
+            if not is_sub:
+                filtered_signals.append(s1)
+        return filtered_signals
 
     def _detect_surface_tense(self, words: list[str]) -> TenseSignal | None:
         if not words:
@@ -332,36 +379,48 @@ class GrammarChecker:
         
         lowered = [w.lower() for w in words]
         
-        # 1. Compound tenses (auxiliary + main verb, possibly separated by 'not' or a subject)
+        # 1. Future compound tenses (highest priority to avoid greedy will + verb simple matching)
         for i, word in enumerate(lowered):
-            # Future Simple: will + base
             if word == "will":
-                # Look ahead for the main verb
+                # Future Perfect Continuous: will have been working
+                if i + 3 < len(lowered) and lowered[i+1] == "have" and lowered[i+2] == "been" and self.verb_engine.is_gerund(lowered[i+3]):
+                    return TenseSignal(name="future_perfect_continuous", source="auxiliary", evidence=f"will have been {words[i+3]}")
+                
+                # Future Perfect: will have worked
+                if i + 2 < len(lowered) and lowered[i+1] == "have" and (self.verb_engine.is_participle(lowered[i+2]) or self.verb_engine.is_past_form(lowered[i+2])):
+                    return TenseSignal(name="future_perfect", source="auxiliary", evidence=f"will have {words[i+2]}")
+                
+                # Future Continuous: will be working
+                if i + 2 < len(lowered) and lowered[i+1] == "be" and self.verb_engine.is_gerund(lowered[i+2]):
+                    return TenseSignal(name="future_continuous", source="auxiliary", evidence=f"will be {words[i+2]}")
+                
+                # Future Simple: will work (possibly with 'not' or adverb in between)
                 for j in range(i + 1, min(i + 4, len(lowered))):
-                    if self._looks_like_verb(lowered[j]) and lowered[j] != "be":
+                    if self._looks_like_verb(lowered[j]) and lowered[j] not in {"be", "have"}:
                         return TenseSignal(name="future_simple", source="auxiliary", evidence=f"will {words[j]}")
 
-            # Perfect tenses: have/has/had + participle
+        # 2. Perfect and continuous compound tenses
+        for i, word in enumerate(lowered):
             if word in {"have", "has", "had"}:
+                # Perfect Continuous: have/has/had been working
+                if i + 2 < len(lowered) and lowered[i+1] == "been" and self.verb_engine.is_gerund(lowered[i+2]):
+                    name = "past_perfect_continuous" if word == "had" else "present_perfect_continuous"
+                    return TenseSignal(name=name, source="auxiliary", evidence=f"{words[i]} been {words[i+2]}")
+                
+                # Perfect: have/has/had worked
                 for j in range(i + 1, min(i + 4, len(lowered))):
-                    # Perfect Continuous: have/has/had been + gerund
-                    if lowered[j] == "been" and j + 1 < len(lowered):
-                        if self.verb_engine.is_gerund(lowered[j+1]):
-                            name = "past_perfect_continuous" if word == "had" else "present_perfect_continuous"
-                            return TenseSignal(name=name, source="auxiliary", evidence=f"{words[i]}...{words[j+1]}")
-                    # Past/Present Perfect: have/has/had + participle
-                    if self.verb_engine.is_participle(lowered[j]):
+                    if lowered[j] != "been" and (self.verb_engine.is_participle(lowered[j]) or self.verb_engine.is_past_form(lowered[j])):
                         name = "past_perfect" if word == "had" else "present_perfect"
-                        return TenseSignal(name=name, source="auxiliary", evidence=f"{words[i]}...{words[j]}")
+                        return TenseSignal(name=name, source="auxiliary", evidence=f"{words[i]} {words[j]}")
 
-            # Continuous tenses: am/is/are/was/were + gerund
             if word in {"am", "is", "are", "was", "were"}:
+                # Continuous: am/is/are/was/were working
                 for j in range(i + 1, min(i + 4, len(lowered))):
                     if self.verb_engine.is_gerund(lowered[j]):
                         name = "past_continuous" if word in {"was", "were"} else "present_continuous"
-                        return TenseSignal(name=name, source="auxiliary", evidence=f"{words[i]}...{words[j]}")
+                        return TenseSignal(name=name, source="auxiliary", evidence=f"{words[i]} {words[j]}")
 
-        # 2. Simple tenses (lexical verb only)
+        # 3. Simple tenses (lexical verb only)
         predicate = self._detect_clause_predicate(words)
         if predicate:
             surface = str(predicate["surface"]).lower()
@@ -370,7 +429,6 @@ class GrammarChecker:
             
             base = self.verb_engine.to_base(surface)
             if base:
-                # Known verb, not past form -> present simple
                 return TenseSignal(name="present_simple", source="lexical-verb", evidence=str(predicate["surface"]))
 
         return None
@@ -630,8 +688,6 @@ class GrammarChecker:
             sentence_time_signals,
             key=lambda signal: (len(self._normalize_phrase(signal.evidence)), signal.evidence),
         )
-        if dominant_signal.name not in {"past_simple", "present_simple"}:
-            return []
 
         seen_evidence = {
             str(issue.evidence or "").lower()
@@ -646,12 +702,14 @@ class GrammarChecker:
             if len(clause_words) < 2:
                 continue
 
-            local_signals = self._detect_time_expressions(clause_text)
-            if local_signals and not any(signal.name == dominant_signal.name for signal in local_signals):
+            surface_tense = self._detect_surface_tense(clause_words)
+            if surface_tense is None:
                 continue
 
-            surface_tense = self._detect_surface_tense(clause_words)
-            if surface_tense is None or surface_tense.name not in {"present_simple", "past_simple"}:
+            local_signals = self._detect_time_expressions(clause_text)
+            if local_signals and any(signal.name == surface_tense.name for signal in local_signals):
+                continue
+            if local_signals and not any(signal.name == dominant_signal.name for signal in local_signals):
                 continue
             if surface_tense.name == dominant_signal.name:
                 continue
@@ -660,32 +718,61 @@ class GrammarChecker:
             if predicate is None:
                 continue
 
-            surface_phrase = str(predicate["surface"])
-            if surface_phrase.lower() in seen_evidence:
-                continue
+            # For non-simple or compound tenses, replace the whole verb phrase
+            if dominant_signal.name not in {"past_simple", "present_simple"} or surface_tense.name not in {"past_simple", "present_simple"}:
+                surface_phrase = surface_tense.evidence
+                if surface_phrase.lower() in seen_evidence:
+                    continue
 
-            subject = self._infer_conjugation_subject(clause_words, int(predicate["word_index"]))
-            suggestion = self.verb_engine.suggest_for_tense(str(predicate["base"]), dominant_signal.name, subject)
-            if not suggestion or suggestion.lower() == surface_phrase.lower():
-                continue
+                subject = self._infer_conjugation_subject(clause_words, int(predicate["word_index"]))
+                suggestion = self.verb_engine.suggest_for_tense(str(predicate["base"]), dominant_signal.name, subject)
+                if not suggestion or suggestion.lower() == surface_phrase.lower():
+                    continue
 
-            seen_evidence.add(surface_phrase.lower())
-            issues.append(
-                GrammarIssue(
-                    category="Tense",
-                    message=(
-                        f'Clause-level timeline still points to {self._humanize_tense(dominant_signal.name)} '
-                        f'because of "{dominant_signal.evidence}", so "{surface_phrase}" should align too.'
-                    ),
-                    sentence=sentence,
-                    evidence=surface_phrase,
-                    suggestion=suggestion,
-                    rule_id="RULE-CLAUSE-TENSE-PROPAGATION",
-                    knowledge_source="src-grammar-rulepack",
-                    target_tense=dominant_signal.name,
-                    source_tense=surface_tense.name,
+                seen_evidence.add(surface_phrase.lower())
+                issues.append(
+                    GrammarIssue(
+                        category="Tense",
+                        message=(
+                            f'Clause-level timeline still points to {self._humanize_tense(dominant_signal.name)} '
+                            f'because of "{dominant_signal.evidence}", so "{surface_phrase}" should align too.'
+                        ),
+                        sentence=sentence,
+                        evidence=surface_phrase,
+                        suggestion=suggestion,
+                        rule_id="RULE-CLAUSE-TENSE-PROPAGATION",
+                        knowledge_source="src-grammar-rulepack",
+                        target_tense=dominant_signal.name,
+                        source_tense=surface_tense.name,
+                    )
                 )
-            )
+            else:
+                surface_phrase = str(predicate["surface"])
+                if surface_phrase.lower() in seen_evidence:
+                    continue
+
+                subject = self._infer_conjugation_subject(clause_words, int(predicate["word_index"]))
+                suggestion = self.verb_engine.suggest_for_tense(str(predicate["base"]), dominant_signal.name, subject)
+                if not suggestion or suggestion.lower() == surface_phrase.lower():
+                    continue
+
+                seen_evidence.add(surface_phrase.lower())
+                issues.append(
+                    GrammarIssue(
+                        category="Tense",
+                        message=(
+                            f'Clause-level timeline still points to {self._humanize_tense(dominant_signal.name)} '
+                            f'because of "{dominant_signal.evidence}", so "{surface_phrase}" should align too.'
+                        ),
+                        sentence=sentence,
+                        evidence=surface_phrase,
+                        suggestion=suggestion,
+                        rule_id="RULE-CLAUSE-TENSE-PROPAGATION",
+                        knowledge_source="src-grammar-rulepack",
+                        target_tense=dominant_signal.name,
+                        source_tense=surface_tense.name,
+                    )
+                )
 
         return issues
 
@@ -883,7 +970,7 @@ class GrammarChecker:
                     sentence=sentence,
                     evidence=tokens[0],
                     suggestion=f"{tokens[0]},",
-                    severity="warning",
+                    severity="error",
                     rule_id="RULE-LINKING-WORD",
                     knowledge_source="src-grammar-rulepack",
                 )
@@ -1109,6 +1196,14 @@ class GrammarChecker:
                     if lowered[j] == "not":
                         continue
                     if self._looks_like_verb(lowered[j]):
+                        # Avoid treating the subject noun as a verb if there is another verb later in the sequence
+                        has_later_verb = False
+                        for k in range(j + 1, min(j + 4, len(lowered))):
+                            if self._looks_like_verb(lowered[k]) and lowered[k] not in self.preposition_words:
+                                has_later_verb = True
+                                break
+                        if has_later_verb and lowered[j] not in {"have", "has", "had", "be", "been", "being", "am", "is", "are", "was", "were"}:
+                            continue
                         main_verb_idx = j
                         break
                 
@@ -1244,10 +1339,10 @@ class GrammarChecker:
         if not issue.suggestion or issue.category == "SVO":
             return text, []
 
-        if issue.category == "Tense" and issue.target_tense in {"past_simple", "present_simple"}:
-            updated, propagated_corrections = self._apply_clause_tense_propagation(text, issue)
-            if propagated_corrections:
-                return updated, propagated_corrections
+        if issue.category == "Tense":
+            if issue.target_tense:
+                return self._apply_clause_tense_propagation(text, issue)
+            return text, []
 
         if issue.category == "Linking Word":
             evidence = issue.evidence or issue.suggestion.rstrip(",")
@@ -1322,21 +1417,35 @@ class GrammarChecker:
         issue: GrammarIssue,
     ) -> tuple[str, list[CorrectionEntry]]:
         target_tense = issue.target_tense
-        if target_tense not in {"past_simple", "present_simple"}:
+        if not target_tense:
             return text, []
 
-        tokens = self._tokenize(text)
         corrections: list[CorrectionEntry] = []
         carried_subject: str | None = None
+        updated_text = text
 
-        for clause in self._segment_clauses(text):
+        for clause in self._segment_clauses(updated_text):
             clause_text = clause["text"]
             clause_words = clause["words"]
             if len(clause_words) < 2:
                 continue
 
+            # If the target tense is not a simple narrative tense, only apply to the clause
+            # that actually contains the evidence verb of the issue.
+            if target_tense not in {"past_simple", "present_simple"}:
+                if issue.evidence and issue.evidence.lower() not in clause_text.lower():
+                    continue
+
             predicate = self._detect_clause_predicate(clause_words)
-            pred_idx = int(predicate["word_index"]) if predicate else None
+            if predicate is None:
+                continue
+            pred_idx = int(predicate["word_index"])
+
+            # Skip verbs preceded by modals or infinitive marker 'to'
+            if pred_idx > 0:
+                prev_word = clause_words[pred_idx - 1].lower()
+                if (prev_word in self.modals and prev_word != "will") or prev_word == "to":
+                    continue
 
             local_signals = self._detect_time_expressions(clause_text)
             if local_signals and not any(signal.name == target_tense for signal in local_signals):
@@ -1344,7 +1453,7 @@ class GrammarChecker:
                 continue
 
             surface_tense = self._detect_surface_tense(clause_words)
-            if surface_tense is None or surface_tense.name not in {"present_simple", "past_simple"}:
+            if surface_tense is None:
                 carried_subject = self._infer_conjugation_subject(clause_words, pred_idx) or carried_subject
                 continue
             if surface_tense.name == target_tense:
@@ -1352,20 +1461,74 @@ class GrammarChecker:
                 continue
 
             clause_subject = self._infer_conjugation_subject(clause_words, pred_idx) or carried_subject
-            clause_corrections = self._rewrite_clause_simple_tense(
-                tokens=tokens,
-                token_indexes=list(clause["indexes"]),
-                target_tense=target_tense,
-                subject=clause_subject,
-                issue=issue,
-            )
-            corrections.extend(clause_corrections)
+            
+            # Suggest the corrected verb phrase based on predicate base form
+            suggestion = self.verb_engine.suggest_for_tense(str(predicate["base"]), target_tense, clause_subject)
+            if not suggestion:
+                carried_subject = clause_subject
+                continue
+
+            evidence = surface_tense.evidence
+            if evidence.lower() == suggestion.lower():
+                carried_subject = clause_subject
+                continue
+
+            # Guard against double-inserting auxiliaries when the clause already contains
+            # the leading auxiliary chain for the target tense.  For example, if the
+            # sentence is "We has been wait …" (already has "has been" as part of a
+            # malformed present-perfect-continuous) the SVA rule will later correct
+            # "has→have", but right now the tense-propagation sees "wait" as
+            # present_simple and would replace it with "have been waiting", resulting in
+            # "have been have been waiting".  Detect this case and trim the suggestion to
+            # only the terminal component that is actually missing (gerund / participle).
+            AUX_PREFIXES: dict[str, list[str]] = {
+                "present_perfect_continuous": ["have been", "has been"],
+                "past_perfect_continuous":    ["had been"],
+                "future_perfect_continuous":  ["will have been"],
+                "present_perfect":            ["have", "has"],
+                "past_perfect":               ["had"],
+                "future_perfect":             ["will have"],
+                "present_continuous":         ["am", "is", "are"],
+                "past_continuous":            ["was", "were"],
+                "future_continuous":          ["will be"],
+                "future_simple":              ["will"],
+            }
+            clause_lower = clause_text.lower()
+            trimmed_suggestion = suggestion
+            for prefix in AUX_PREFIXES.get(target_tense, []):
+                prefix_words = prefix.split()
+                # Check that the prefix appears before the predicate in the clause
+                prefix_pattern = r"\b" + r"\s+".join(re.escape(w) for w in prefix_words) + r"\s+"
+                if re.search(prefix_pattern, clause_lower):
+                    # Trim the full "auxiliary + …" suggestion to just its terminal word(s)
+                    suggestion_words = suggestion.split()
+                    prefix_len = len(prefix_words)
+                    if len(suggestion_words) > prefix_len and suggestion.lower().startswith(prefix + " "):
+                        trimmed_suggestion = " ".join(suggestion_words[prefix_len:])
+                    break
+
+            # Replace the surface phrase precisely within the clause substring to avoid duplicate issues
+            new_clause_text = self._replace_phrase_once(clause_text, evidence, trimmed_suggestion)
+            if new_clause_text != clause_text:
+                new_text = self._replace_phrase_once(updated_text, clause_text, new_clause_text)
+                if new_text != updated_text:
+                    correction = self._make_correction_entry(
+                        kind="grammar",
+                        original=evidence,
+                        corrected=trimmed_suggestion,
+                        issue=issue,
+                        changed=True,
+                    )
+                    if correction:
+                        corrections.append(correction)
+                    updated_text = new_text
+
             carried_subject = clause_subject
 
         if not corrections:
             return text, []
 
-        return self._untokenize(tokens), corrections
+        return updated_text, corrections
 
     def _rewrite_clause_simple_tense(
         self,
@@ -1400,7 +1563,7 @@ class GrammarChecker:
                 continue
             if lowered in {"have", "has", "had"} and next_word and self.verb_engine.is_participle(next_word):
                 continue
-            if lowered in {"do", "does", "did"} and next_word and self._looks_like_base_verb(next_word) and next_word not in self.collocation_lead_verbs:
+            if lowered in {"do", "does", "did"} and next_word and self._looks_like_base_verb(next_word) and next_word not in self.collocation_lead_verbs and next_word not in COLLOCATION_NOUNS:
                 continue
             if not self._looks_like_verb(lowered):
                 continue
@@ -1408,7 +1571,7 @@ class GrammarChecker:
                 continue
 
             base = self.verb_engine.to_base(lowered) or lowered
-            if base not in self.collocation_lead_verbs and previous in {"do", "does", "did", "have", "has", "had"}:
+            if base not in self.collocation_lead_verbs and base not in COLLOCATION_NOUNS and previous in {"do", "does", "did", "have", "has", "had"}:
                 continue
 
             replacement = self.verb_engine.suggest_for_tense(base, target_tense, subject)
@@ -1641,13 +1804,13 @@ class GrammarChecker:
                 continue
             if previous in self.determiners:
                 continue
-            if previous in self.modals or previous in {"to"}:
+            if previous in {"to"}:
                 continue
             if lowered in {"am", "is", "are", "was", "were", "be", "been", "being"}:
                 continue
             if lowered in {"have", "has", "had"} and next_word and self.verb_engine.is_participle(next_word):
                 continue
-            if lowered in {"do", "does", "did"} and next_word and self._looks_like_base_verb(next_word) and next_word not in self.collocation_lead_verbs:
+            if lowered in {"do", "does", "did"} and next_word and self._looks_like_base_verb(next_word) and next_word not in self.collocation_lead_verbs and next_word not in COLLOCATION_NOUNS:
                 continue
             if self.verb_engine.is_gerund(lowered) and previous in {"am", "is", "are", "was", "were", "be", "been", "being"}:
                 base = self.verb_engine.to_base(lowered) or lowered
@@ -1671,7 +1834,7 @@ class GrammarChecker:
                 continue
 
             base = self.verb_engine.to_base(lowered) or lowered
-            if base not in self.collocation_lead_verbs and previous in {"do", "does", "did", "have", "has", "had"}:
+            if base not in self.collocation_lead_verbs and base not in COLLOCATION_NOUNS and previous in {"do", "does", "did", "have", "has", "had"}:
                 continue
 
             return {

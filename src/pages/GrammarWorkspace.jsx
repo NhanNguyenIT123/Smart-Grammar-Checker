@@ -382,12 +382,16 @@ export default function GrammarWorkspace() {
       return;
     }
 
+    // Normalise: collapse multiple lines that each start with the same DSL command
+    // to prevent accidental multi-command submissions from the textarea.
+    const trimmedValue = value.trim();
+
     setLoading(true);
     setBanner("");
-    setSubmittedInput(value);
+    setSubmittedInput(trimmedValue);
     setResult(null);
 
-    const response = await executeDslCommand(value, currentUser.id, overrideContext || deriveContext());
+    const response = await executeDslCommand(trimmedValue, currentUser.id, overrideContext || deriveContext());
     updateActivity();
 
     if (!response.success && response.command === "auth_required") {
@@ -414,6 +418,15 @@ export default function GrammarWorkspace() {
       setSelectedQuizId(response.data.quiz_id);
       setTutorQuizAction("preview");
     }
+  };
+
+  // Called when the user clicks a suggestion chip in the error panel.
+  // Replace the input with the suggestion (don't append) and immediately run it.
+  const handleApplySuggestion = (suggestion) => {
+    const clean = String(suggestion || "").trim();
+    if (!clean) return;
+    setInput(clean);
+    runCommand(clean);
   };
 
   const handleLogout = async () => {
@@ -918,8 +931,16 @@ export default function GrammarWorkspace() {
                   placeholder={
                     activeView === "classes" && !isTutor
                       ? 'submit answers for quiz ... { 1 = "..." ; 2 = "..." }'
-                      : "Type your DSL command here..."
+                      : "Type your DSL command here… (Enter to run)"
                   }
+                  onKeyDown={(event) => {
+                    // Plain Enter (without Shift) submits the command so the
+                    // textarea stays single-line and avoids accidental multi-line inputs.
+                    if (event.key === "Enter" && !event.shiftKey && !loading) {
+                      event.preventDefault();
+                      runCommand(input);
+                    }
+                  }}
                 />
               ) : null}
 
@@ -981,6 +1002,7 @@ export default function GrammarWorkspace() {
               <ResultTemplates 
                 result={panelResult} 
                 submittedInput={panelSubmittedInput}
+                onApplySuggestion={handleApplySuggestion}
                 onRunCommand={(cmd, ctx) => {
                   setInput(cmd);
                   runCommand(cmd, ctx);

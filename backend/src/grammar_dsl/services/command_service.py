@@ -22,6 +22,7 @@ from grammar_dsl.dsl.ast import (
     ShowQuizCommand,
     ShowResultsCommand,
     ShowStudentsCommand,
+    ShowTokensCommand,
     SpellLookupCommand,
     StatusExpr,
     SubmitAnswersCommand,
@@ -64,6 +65,17 @@ class CommandService:
 
     def execute(self, raw_input: str, user_id: str | None = None, context: dict[str, Any] | None = None) -> CommandResponse:
         resolved_user = self._resolve_user(user_id)
+
+        # --- Deduplication guard -------------------------------------------------
+        # A textarea can accidentally produce multiple copies of the same command
+        # (e.g. the user pressed Enter after typing then clicked Run, leaving two
+        # identical lines).  If every non-empty line is the same string, silently
+        # collapse them to one line so the command still succeeds.
+        raw_lines = [ln.strip() for ln in raw_input.splitlines() if ln.strip()]
+        if len(raw_lines) > 1 and len(set(ln.lower() for ln in raw_lines)) == 1:
+            raw_input = raw_lines[0]
+        # -------------------------------------------------------------------------
+
         text = raw_input.strip()
         safe_context = context or {}
         if not text:
@@ -75,6 +87,7 @@ class CommandService:
         if multi_command_error is not None:
             self._record_response(resolved_user["username"], text, multi_command_error)
             return multi_command_error
+
 
         try:
             command = self.parser.parse(text)
@@ -96,6 +109,8 @@ class CommandService:
                     return response
 
             suggestions = self.suggestion_engine.suggest_command_inputs(text)
+            if text.lower().startswith("show token "):
+                suggestions.append("show tokens " + text[11:])
             submit_format_suggestions = self._build_submit_answers_format_suggestions(text, safe_context)
             if submit_format_suggestions:
                 submit_like = [
@@ -219,6 +234,17 @@ class CommandService:
                 ),
                 data={"deleted_runs": deleted_runs},
             )
+
+        if isinstance(command, ShowTokensCommand):
+            inspection = self.parser.inspect(command.source_text)
+            response = CommandResponse(
+                success=True,
+                command="show tokens",
+                message=f"Analyzed input syntax and generated {inspection['token_count']} token(s).",
+                data=inspection,
+            )
+            self._record_response(resolved_user["username"], text, response)
+            return response
 
         if isinstance(command, VerbLookupCommand):
             response = self._handle_verb_lookup(command.word)
@@ -696,6 +722,11 @@ class CommandService:
                 "audience": "everyone",
             },
             {
+                "usage": "show tokens <command>",
+                "description": "Display the token stream and parsing inspection payload for a given DSL command.",
+                "audience": "everyone",
+            },
+            {
                 "usage": "generate exercise with <feature-expr>",
                 "description": "Generate one practice item from grammar features such as present simple, object pronoun, or subject-verb agreement.",
                 "audience": "everyone",
@@ -784,6 +815,39 @@ class CommandService:
         return enriched
 
     def _check_grammar_with_stable_backend(self, paragraph: str) -> dict[str, Any]:
+        only_ml = os.getenv("GRAMMAR_CHECK_ONLY_ML", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+        if only_ml:
+            # Pure Local ML Mode: bypasses both static rulepack and SpaCy
+            sentences = [s.strip() for s in re.split(r"[.!?]+", paragraph) if s.strip()]
+            analysis_dict = {
+                "paragraph": paragraph,
+                "sentence_count": max(1, len(sentences)),
+                "grammar_errors": [],
+                "grammar_issues": [],
+                "corrected_text": paragraph,
+                "analysis_backend": "local-ml-only",
+            }
+            try:
+                from grammar_dsl.services.local_ml import check_grammar_with_local_ml
+
+                local_ml_result = check_grammar_with_local_ml(paragraph)
+                local_errors = [
+                    issue
+                    for issue in local_ml_result.get("grammar_errors", [])
+                    if issue.get("rule_id") != "SYSTEM_ERROR"
+                ]
+
+                if local_errors:
+                    analysis_dict["grammar_errors"] = local_errors
+                    analysis_dict["grammar_issues"] = local_errors
+                    corrected_text = str(local_ml_result.get("corrected_text", "")).strip()
+                    if corrected_text and corrected_text != paragraph:
+                        analysis_dict["corrected_text"] = corrected_text
+            except Exception:
+                pass
+            return analysis_dict
+
         # Always run deterministic local rules first so grammar checks stay available.
         analysis_dict = asdict(self.grammar_checker.check(paragraph))
         analysis_dict["analysis_backend"] = "rule-based"

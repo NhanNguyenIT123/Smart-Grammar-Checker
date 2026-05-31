@@ -50,12 +50,14 @@ def check_grammar_with_local_ml(text: str) -> dict[str, Any]:
     if _normalize(corrected) == _normalize(text):
         return {"corrected_text": text, "grammar_errors": []}
 
+    explanation = _generate_ml_explanation(text, corrected)
+
     return {
         "corrected_text": corrected,
         "grammar_errors": [
             {
                 "category": "ML Correction",
-                "message": "The local sequence-to-sequence model suggested a grammar rewrite.",
+                "message": explanation,
                 "rule_id": "ML-GEC-REWRITE",
                 "suggestion": corrected,
                 "evidence": text,
@@ -65,6 +67,40 @@ def check_grammar_with_local_ml(text: str) -> dict[str, Any]:
             }
         ],
     }
+
+
+def _generate_ml_explanation(original: str, corrected: str) -> str:
+    import difflib
+
+    orig_words = str(original or "").split()
+    corr_words = str(corrected or "").split()
+
+    matcher = difflib.SequenceMatcher(None, orig_words, corr_words)
+    opcodes = matcher.get_opcodes()
+
+    changes = []
+    for tag, i1, i2, j1, j2 in opcodes:
+        if tag == "equal":
+            continue
+
+        orig_part = " ".join(orig_words[i1:i2])
+        corr_part = " ".join(corr_words[j1:j2])
+
+        if tag == "replace":
+            changes.append(f"changing '{orig_part}' to '{corr_part}'")
+        elif tag == "delete":
+            changes.append(f"removing redundant '{orig_part}'")
+        elif tag == "insert":
+            changes.append(f"inserting '{corr_part}'")
+
+    if not changes:
+        return "The local sequence-to-sequence model suggested a grammar rewrite for better flow."
+
+    if len(changes) == 1:
+        return "AI suggested " + changes[0] + " for better phrasing and correctness."
+
+    explanation = ", ".join(changes[:-1]) + f", and {changes[-1]}"
+    return "AI suggested " + explanation + " to improve sentence structure."
 
 
 @lru_cache(maxsize=1)
