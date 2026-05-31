@@ -30,7 +30,7 @@ class CommandServiceTests(unittest.TestCase):
         response = self.service.execute("help")
         self.assertTrue(response.success)
         self.assertEqual(response.command, "help")
-        self.assertEqual(len(response.data["commands"]), 14)
+        self.assertEqual(len(response.data["commands"]), 19)
         self.assertGreater(len(response.data["coverage_matrix"]), 0)
         self.assertIn("pipeline_summary", response.data)
         self.assertIn("knowledge_stats", response.data["pipeline_summary"])

@@ -2530,7 +2530,7 @@ class GrammarDSLParser ( Parser ):
                 self.state = 300
                 self.match(GrammarDSLParser.RIGHT_PAREN)
                 pass
-            elif token in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]:
+            elif token in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 75]:
                 self.enterOuterAlt(localctx, 2)
                 self.state = 302
                 self.featureAtom()
@@ -2654,13 +2654,17 @@ class GrammarDSLParser ( Parser ):
                     self.state = 310
                     self.grammaticalFeature()
                     pass
+                elif token == 75:
+                    self.state = 310
+                    self.match(GrammarDSLParser.WORD)
+                    pass
                 else:
                     raise NoViableAltException(self)
 
                 self.state = 313 
                 self._errHandler.sync(self)
                 _la = self._input.LA(1)
-                if not ((((_la) & ~0x3f) == 0 and ((1 << _la) & 4397509648382) != 0)):
+                if not ((((_la) & ~0x3f) == 0 and ((1 << _la) & 4397509648382) != 0) or _la == 75):
                     break
 
         except RecognitionException as re:
@@ -3239,7 +3243,8 @@ class GrammarDSLParser ( Parser ):
             self.enterOuterAlt(localctx, 1)
             self.state = 340
             _la = self._input.LA(1)
-            if not(((((_la - 67)) & ~0x3f) == 0 and ((1 << (_la - 67)) & 903) != 0)):
+            allowed_tokens = set(range(1, 58)) | {67, 68, 69, 74, 75, 76}
+            if _la not in allowed_tokens:
                 self._errHandler.recoverInline(self)
             else:
                 self._errHandler.reportMatch(self)
