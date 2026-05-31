@@ -50,6 +50,22 @@ class ExerciseGenerator:
         feature_text = "|".join(feature_strings)
         base_seed = int(hashlib.sha1(feature_text.encode("utf-8")).hexdigest(), 16) % 1000000
 
+        # Try generating with Ollama first if enabled
+        import os
+        use_ollama = os.getenv("GRAMMAR_CHECK_USE_OLLAMA", "0").strip().lower() in {"1", "true", "yes", "on"}
+        if use_ollama:
+            ollama_items = self._generate_with_ollama(feature_labels, requested_total)
+            if ollama_items:
+                seed_text = "|".join(item["id"] for item in ollama_items)
+                exercise_set_id = f"set-ollama-{hashlib.sha1(seed_text.encode('utf-8')).hexdigest()[:10]}"
+                return {
+                    "exercise_set_id": exercise_set_id,
+                    "requested_count": requested_total,
+                    "items": ollama_items,
+                    "features": feature_labels,
+                    "feature_bundles": [sorted(bundle) for bundle in bundles],
+                }
+
         if False: # Disabling corpus generator
             pass
         else:
@@ -65,6 +81,95 @@ class ExerciseGenerator:
             "features": feature_labels,
             "feature_bundles": [sorted(bundle) for bundle in bundles],
         }
+
+    def _generate_with_ollama(self, features: list[str], count: int) -> list[dict[str, Any]]:
+        import requests
+        import json
+
+        # Detect available models and pick the best one
+        model_name = "qwen2.5-coder:latest"
+        try:
+            tags_resp = requests.get("http://localhost:11434/api/tags", timeout=1.5)
+            if tags_resp.status_code == 200:
+                available_models = [m["name"] for m in tags_resp.json().get("models", [])]
+                if "qwen2.5-coder:latest" in available_models:
+                    model_name = "qwen2.5-coder:latest"
+                elif "llama3:latest" in available_models:
+                    model_name = "llama3:latest"
+                elif available_models:
+                    model_name = available_models[0]
+                else:
+                    return []
+            else:
+                return []
+        except Exception:
+            return []
+
+        features_str = ", ".join(features)
+        system_prompt = (
+            "You are an expert English Grammar Teacher. Your task is to generate high-quality, academic grammar exercises.\n"
+            "You must return ONLY a raw JSON array of objects. Do not include any markdown formatting, backticks, or conversational text. Just the raw JSON."
+        )
+
+        user_prompt = (
+            f"Generate exactly {count} English grammar exercise(s) targeting the following features: {features_str}.\n"
+            f"Each exercise object in the JSON array must strictly contain these keys:\n"
+            f'- "prompt": A clear instruction and sentence with a gap, e.g., "Fill in the blank with the correct past simple form: She ____ (go) to the library yesterday."\n'
+            f'- "expected_answer": The exact correct word or phrase to fill in the blank, e.g., "went"\n'
+            f'- "accepted_variants": A JSON list of acceptable alternative correct answers, e.g., ["went"]\n'
+            f'- "answer_preview": The full correct completed sentence, e.g., "She went to the library yesterday."\n'
+            f'- "difficulty": "intermediate"\n'
+            f'- "features": ["{features[0]}"]\n'
+            f"Double-check that the JSON is perfectly valid and matches the requested count."
+        )
+
+        try:
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": model_name,
+                    "prompt": f"System: {system_prompt}\nUser: {user_prompt}",
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.3
+                    }
+                },
+                timeout=20
+            )
+            if response.status_code != 200:
+                return []
+
+            response_text = response.json().get("response", "").strip()
+            # Clean potential markdown wrapping
+            if response_text.startswith("```"):
+                parts = response_text.split("```")
+                if len(parts) >= 3:
+                    response_text = parts[1]
+                    if response_text.startswith("json"):
+                        response_text = response_text[4:].strip()
+            response_text = response_text.strip()
+
+            raw_items = json.loads(response_text)
+            if not isinstance(raw_items, list):
+                raw_items = [raw_items]
+
+            items = []
+            for idx, raw_item in enumerate(raw_items[:count]):
+                items.append({
+                    "id": f"ollama-{idx}",
+                    "blueprint_id": f"ollama-gen-{idx}",
+                    "type": "prompt",
+                    "difficulty": raw_item.get("difficulty", "intermediate"),
+                    "features": raw_item.get("features", features),
+                    "prompt": raw_item.get("prompt", "Fill in the blank."),
+                    "expected_answer": raw_item.get("expected_answer", ""),
+                    "accepted_variants": raw_item.get("accepted_variants", [raw_item.get("expected_answer", "")]),
+                    "answer_preview": raw_item.get("answer_preview", ""),
+                })
+            return items
+        except Exception as e:
+            print(f"Ollama generation failed: {e}")
+            return []
 
     def _expand_feature_expr(self, expr) -> list[set[str]]:
         if isinstance(expr, FeatureExpr):
